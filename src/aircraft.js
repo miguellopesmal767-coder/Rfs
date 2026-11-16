@@ -633,12 +633,16 @@ export function buildCockpit(spec, instruments) {
   const g = new THREE.Group();
   const [cx, cy, cz] = spec.cam.cockpit;
   const panelW = spec.key === 'airliner' ? 3.4 : 1.7;
-  const panelY = cy - 0.32;
+  const panelY = cy - 0.9;
+  const panelZ = cz + 1.2;
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: 0x303a46, emissive: 0x101820, roughness: 0.72,
+  });
 
-  const dash = new THREE.Mesh(new THREE.BoxGeometry(panelW, 0.34, 0.42), matDark());
-  dash.position.set(cx, panelY, cz + 0.58);
-  const shade = new THREE.Mesh(new THREE.BoxGeometry(panelW + 0.2, 0.44, 0.34), matDark());
-  shade.position.set(cx, panelY + 0.52, cz + 0.5);
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(panelW, 0.28, 0.34), panelMat);
+  dash.position.set(cx, panelY, panelZ + 0.58);
+  const shade = new THREE.Mesh(new THREE.BoxGeometry(panelW + 0.1, 0.2, 0.2), panelMat);
+  shade.position.set(cx, panelY + 0.42, panelZ + 0.5);
   shade.rotation.x = -0.9;
   g.add(dash, shade);
 
@@ -648,10 +652,11 @@ export function buildCockpit(spec, instruments) {
   for (let i = 0; i < 3; i++) {
     const m = new THREE.Mesh(
       new THREE.PlaneGeometry(gw, gw),
-      new THREE.MeshBasicMaterial({ map: order[i].texture, toneMapped: false })
+      new THREE.MeshBasicMaterial({ map: order[i].texture, toneMapped: false, side: THREE.DoubleSide })
     );
-    m.position.set(cx + (i - 1) * gw * 1.15, panelY + 0.3, cz + 0.42);
+    m.position.set(cx + (i - 1) * gw * 1.15, panelY + 0.3, panelZ + 0.42);
     m.rotation.x = -0.1;
+    m.rotation.y = Math.PI;
     g.add(m);
     gaugeMeshes.push(m);
   }
@@ -663,7 +668,7 @@ export function buildCockpit(spec, instruments) {
   const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.028, 8, 16), matDark());
   wheel.rotation.x = Math.PI / 2;
   yoke.add(column, wheel);
-  yoke.position.set(cx + (panelW > 2 ? -panelW * 0.32 : 0), panelY - 0.05, cz + 0.2);
+  yoke.position.set(cx + (panelW > 2 ? -panelW * 0.32 : 0), panelY - 0.05, panelZ + 0.2);
   g.add(yoke);
 
   // manetes
@@ -674,12 +679,12 @@ export function buildCockpit(spec, instruments) {
     t.rotation.x = -0.8;
     thrG.add(t);
   }
-  thrG.position.set(cx + panelW * 0.32, panelY - 0.02, cz + 0.3);
+  thrG.position.set(cx + panelW * 0.32, panelY - 0.02, panelZ + 0.3);
   g.add(thrG);
 
   // luz interna (painel iluminado também de dia, intensidade sobe à noite)
   const light = new THREE.PointLight(0xffd9a0, 1.6, 6, 2);
-  light.position.set(cx, panelY + 0.55, cz + 0.45);
+  light.position.set(cx, panelY + 0.55, panelZ + 0.45);
   g.add(light);
 
   return { group: g, yoke, throttle: thrG, light };
