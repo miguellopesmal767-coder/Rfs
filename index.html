@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Real Flight Simulator 3D — Mobile</title>
+<style>
+  :root{
+    --glass: rgba(10,16,26,.62);
+    --glass2: rgba(14,22,36,.78);
+    --line: rgba(120,180,255,.22);
+    --accent:#39d2ff;
+    --accent2:#7cff9e;
+    --warn:#ff4d4d;
+    --amber:#ffc24d;
+    --txt:#dfeeff;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#04070d; overscroll-behavior:none; }
+  body{ font-family:"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif; color:var(--txt); touch-action:none; user-select:none; -webkit-user-select:none; }
+  canvas#gl{ position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+  .hidden{ display:none !important; }
+
+  /* ================= HUD ================= */
+  #hud{ position:fixed; inset:0; pointer-events:none; z-index:5; }
+  #hudTop{
+    position:absolute; top:calc(6px + env(safe-area-inset-top)); left:50%; transform:translateX(-50%);
+    display:flex; gap:8px; align-items:stretch; background:var(--glass); border:1px solid var(--line);
+    border-radius:12px; padding:6px 10px; backdrop-filter:blur(6px);
+  }
+  .gauge{ min-width:76px; text-align:center; padding:2px 6px; }
+  .gauge .val{ font-size:20px; font-weight:700; color:#fff; font-variant-numeric:tabular-nums; line-height:1.1; }
+  .gauge .lbl{ font-size:9px; letter-spacing:1.5px; color:var(--accent); opacity:.85; }
+  .gauge .sub{ font-size:9px; color:#9fc1de; font-variant-numeric:tabular-nums; }
+  .sep{ width:1px; background:var(--line); }
+
+  #hudLeft{
+    position:absolute; top:calc(8px + env(safe-area-inset-top)); left:calc(8px + env(safe-area-inset-left));
+    background:var(--glass); border:1px solid var(--line); border-radius:12px; padding:7px 9px;
+    font-size:11px; line-height:1.55; backdrop-filter:blur(6px); min-width:130px;
+  }
+  #hudLeft .row{ display:flex; justify-content:space-between; gap:10px; }
+  #hudLeft .k{ color:#8fb4d6; }
+  #hudLeft .v{ color:#fff; font-variant-numeric:tabular-nums; font-weight:600; }
+  .bar{ height:5px; border-radius:3px; background:#17273d; margin:3px 0 6px; overflow:hidden; }
+  .bar>i{ display:block; height:100%; width:0%; background:linear-gradient(90deg,#2fd06b,#a4e22f); transition:width .15s; }
+  .bar>i.fuel{ background:linear-gradient(90deg,#ff9d2e,#ffd23e); }
+  .bar>i.temp{ background:linear-gradient(90deg,#2fd06b,#ff4d4d); }
+
+  #warnings{
+    position:absolute; top:22%; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; gap:6px; align-items:center; text-align:center;
+  }
+  .warnBox{
+    font-size:15px; font-weight:800; letter-spacing:2px; padding:6px 18px; border-radius:8px;
+    background:rgba(120,10,10,.75); color:#fff; border:1px solid rgba(255,90,90,.8);
+    animation:blink .5s steps(2,start) infinite;
+  }
+  .warnBox.amber{ background:rgba(130,90,0,.75); border-color:rgba(255,200,80,.8); animation:blink .8s steps(2,start) infinite; }
+  .warnBox.green{ background:rgba(10,90,40,.7); border-color:rgba(90,255,140,.7); animation:none; }
+  @keyframes blink{ 50%{ opacity:.25; } }
+  #touchdownMsg{
+    position:absolute; top:34%; left:50%; transform:translateX(-50%); text-align:center;
+    font-size:14px; font-weight:700; color:var(--accent2); text-shadow:0 2px 8px #000; opacity:0; transition:opacity .4s;
+  }
+
+  #camName{
+    position:absolute; top:calc(8px + env(safe-area-inset-top)); right:calc(8px + env(safe-area-inset-right));
+    background:var(--glass); border:1px solid var(--line); border-radius:10px; padding:5px 10px;
+    font-size:11px; color:var(--accent); letter-spacing:1px;
+  }
+  #fpsBox{
+    position:absolute; bottom:calc(4px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
+    font-size:10px; color:#5f7f9d; font-variant-numeric:tabular-nums;
+  }
+
+  /* ================= CONTROLES ================= */
+  #controls{ position:fixed; inset:0; pointer-events:none; z-index:6; }
+  #controls>*{ pointer-events:auto; }
+
+  /* Joystick */
+  #joyZone{ position:absolute; left:0; bottom:0; width:46%; height:52%; }
+  #joyBase{
+    position:absolute; left:calc(24px + env(safe-area-inset-left)); bottom:calc(26px + env(safe-area-inset-bottom));
+    width:124px; height:124px; border-radius:50%;
+    background:radial-gradient(circle,rgba(20,34,54,.55),rgba(10,16,28,.4));
+    border:2px solid rgba(120,180,255,.35); backdrop-filter:blur(4px);
+  }
+  #joyStick{
+    position:absolute; left:50%; top:50%; width:54px; height:54px; border-radius:50%;
+    transform:translate(-50%,-50%);
+    background:radial-gradient(circle at 35% 30%, #4d6f96, #1d3a55 70%);
+    border:2px solid rgba(160,210,255,.6); box-shadow:0 4px 14px rgba(0,0,0,.5);
+  }
+  #joyBase .axisLbl{ position:absolute; font-size:9px; color:#7ea6c9; letter-spacing:1px; }
+  #joyBase .roll{ bottom:4px; left:50%; transform:translateX(-50%); }
+  #joyBase .pitch{ left:6px; top:50%; transform:translateY(-50%) rotate(-90deg); }
+
+  /* Throttle */
+  #thrZone{ position:absolute; right:0; bottom:0; width:26%; height:60%; }
+  #thrSlider{
+    position:absolute; right:calc(20px + env(safe-area-inset-right)); bottom:calc(30px + env(safe-area-inset-bottom));
+    width:58px; height:190px; border-radius:14px; background:var(--glass); border:1px solid var(--line);
+    overflow:hidden; backdrop-filter:blur(4px);
+  }
+  #thrFill{ position:absolute; bottom:0; left:0; right:0; height:0%;
+    background:linear-gradient(180deg,#39d2ff,#1667b8); opacity:.85; }
+  #thrHandle{
+    position:absolute; left:3px; right:3px; height:34px; bottom:0px; border-radius:10px;
+    background:linear-gradient(180deg,#3b587d,#22354f); border:1px solid rgba(160,210,255,.6);
+    display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#fff;
+  }
+  #thrSlider .lbl{ position:absolute; top:5px; left:0; right:0; text-align:center; font-size:9px; letter-spacing:1px; color:var(--accent); }
+
+  /* Botões laterais */
+  #btnCol{
+    position:absolute; right:calc(92px + env(safe-area-inset-right)); bottom:calc(30px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .cbtn{
+    min-width:64px; padding:9px 10px; border-radius:10px; text-align:center;
+    background:var(--glass2); border:1px solid var(--line); color:var(--txt);
+    font-size:11px; font-weight:700; letter-spacing:.8px; backdrop-filter:blur(4px);
+  }
+  .cbtn small{ display:block; font-size:8px; font-weight:400; color:#8fb4d6; letter-spacing:.5px; margin-top:1px; }
+  .cbtn.active{ background:rgba(57,210,255,.25); border-color:var(--accent); color:#fff; box-shadow:0 0 12px rgba(57,210,255,.35); }
+  .cbtn.danger.active{ background:rgba(255,80,80,.3); border-color:var(--warn); }
+  .cbtn:active{ transform:scale(.96); }
+  .cbtn.off{ opacity:.35; }
+
+  /* Rudder */
+  #rudCol{
+    position:absolute; left:calc(160px + env(safe-area-inset-left)); bottom:calc(30px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:8px;
+  }
+
+  /* Top-right buttons */
+  #topBtns{
+    position:absolute; top:calc(44px + env(safe-area-inset-top)); right:calc(8px + env(safe-area-inset-right));
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .tbtn{
+    width:46px; height:42px; border-radius:10px; background:var(--glass2); border:1px solid var(--line);
+    color:var(--txt); font-size:17px; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);
+  }
+
+  /* ================= OVERLAYS ================= */
+  .overlay{
+    position:fixed; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(ellipse at 50% 30%, rgba(20,40,70,.92), rgba(3,6,12,.96));
+    backdrop-filter:blur(8px); overflow-y:auto; touch-action:pan-y;
+  }
+  .panel{ width:min(680px, 94vw); padding:22px 18px calc(24px + env(safe-area-inset-bottom)); }
+  h1.title{ text-align:center; font-size:clamp(20px,4.5vw,30px); letter-spacing:2px; color:#fff; }
+  h1.title span{ color:var(--accent); }
+  .subtitle{ text-align:center; font-size:11px; letter-spacing:3px; color:#7ea6c9; margin:4px 0 18px; }
+
+  .secLbl{ font-size:10px; letter-spacing:2px; color:var(--accent); margin:14px 0 7px; opacity:.9; }
+  .cards{ display:flex; gap:10px; }
+  .acard{
+    flex:1; background:var(--glass2); border:1px solid var(--line); border-radius:12px; padding:10px 10px 8px; cursor:pointer;
+    transition:border-color .15s, transform .15s;
+  }
+  .acard.sel{ border-color:var(--accent); box-shadow:0 0 16px rgba(57,210,255,.25); transform:translateY(-2px); }
+  .acard .nm{ font-size:13px; font-weight:700; color:#fff; margin-bottom:2px; }
+  .acard .tp{ font-size:9px; letter-spacing:1px; color:var(--accent); margin-bottom:6px; }
+  .acard .st{ font-size:9.5px; color:#9fc1de; line-height:1.5; }
+  .chipRow{ display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{
+    flex:1; min-width:80px; text-align:center; padding:9px 6px; border-radius:10px; cursor:pointer;
+    background:var(--glass2); border:1px solid var(--line); font-size:11px; font-weight:600;
+  }
+  .chip.sel{ border-color:var(--accent); background:rgba(57,210,255,.18); color:#fff; }
+  .bigBtn{
+    display:block; width:100%; margin-top:20px; padding:15px; border-radius:14px; border:none; cursor:pointer;
+    background:linear-gradient(90deg,#1a8fd4,#39d2ff); color:#03131f; font-size:16px; font-weight:800; letter-spacing:2px;
+    box-shadow:0 6px 24px rgba(57,210,255,.35);
+  }
+  .bigBtn:active{ transform:scale(.98); }
+  .ghostBtn{
+    display:block; width:100%; margin-top:10px; padding:12px; border-radius:12px; cursor:pointer;
+    background:transparent; border:1px solid var(--line); color:var(--txt); font-size:13px; font-weight:600; letter-spacing:1px;
+  }
+  .helpTxt{ margin-top:16px; font-size:10.5px; color:#7ea6c9; line-height:1.7; text-align:center; }
+  #crashOverlay .panel h2{ text-align:center; color:var(--warn); font-size:26px; letter-spacing:3px; margin-bottom:8px; }
+  #crashOverlay .panel p{ text-align:center; color:#cfe4f7; font-size:13px; line-height:1.6; }
+  #pauseOverlay .panel h2{ text-align:center; color:#fff; font-size:22px; letter-spacing:3px; margin-bottom:10px; }
+
+  #loading{ position:fixed; inset:0; z-index:30; background:#04070d; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:14px; }
+  #loading .logo{ font-size:22px; letter-spacing:4px; color:var(--accent); font-weight:800; }
+  #loading .spin{ width:34px; height:34px; border-radius:50%; border:3px solid rgba(57,210,255,.2); border-top-color:var(--accent);
+    animation:rot 1s linear infinite; }
+  @keyframes rot{ to{ transform:rotate(360deg);} }
+
+  /* Cockpit frame */
+  #cockpitGlow{ position:fixed; inset:0; z-index:4; pointer-events:none; display:none;
+    box-shadow:inset 0 0 140px 40px rgba(0,0,0,.55); }
+
+  @media (max-width:760px){
+    .cards{ flex-direction:column; }
+    #hudLeft{ font-size:10px; min-width:112px; }
+    .gauge{ min-width:58px; } .gauge .val{ font-size:16px; }
+    #joyBase{ width:104px; height:104px; }
+    #thrSlider{ height:150px; }
+    #rudCol{ left:calc(140px + env(safe-area-inset-left)); }
+  }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="cockpitGlow"></div>
+
+<!-- ================= HUD ================= -->
+<div id="hud" class="hidden">
+  <div id="hudTop">
+    <div class="gauge"><div class="val" id="gSpd">0</div><div class="lbl">KT IAS</div><div class="sub" id="gGs">GS 0</div></div>
+    <div class="sep"></div>
+    <div class="gauge"><div class="val" id="gAlt">0</div><div class="lbl">ALT FT</div><div class="sub" id="gAgl">AGL 0</div></div>
+    <div class="sep"></div>
+    <div class="gauge"><div class="val" id="gHdg">000°</div><div class="lbl">HDG</div><div class="sub" id="gVs">VS +0</div></div>
+  </div>
+
+  <div id="hudLeft">
+    <div class="row"><span class="k">MOTOR</span><span class="v" id="sThr">0%</span></div>
+    <div class="bar"><i id="bThr"></i></div>
+    <div class="row"><span class="k">COMBUSTÍVEL</span><span class="v" id="sFuel">100%</span></div>
+    <div class="bar"><i class="fuel" id="bFuel"></i></div>
+    <div class="row"><span class="k">TEMP.</span><span class="v" id="sTemp">20°C</span></div>
+    <div class="bar"><i class="temp" id="bTemp"></i></div>
+    <div class="row"><span class="k">FLAPS</span><span class="v" id="sFlaps">0</span></div>
+    <div class="row"><span class="k">TREM</span><span class="v" id="sGear">ABAIXADO</span></div>
+    <div class="row"><span class="k">MACH</span><span class="v" id="sMach">0.00</span></div>
+    <div class="row"><span class="k">VENTO</span><span class="v" id="sWind">0KT/000°</span></div>
+  </div>
+
+  <div id="warnings"></div>
+  <div id="touchdownMsg"></div>
+  <div id="camName">CÂMERA: COCKPIT</div>
+  <div id="fpsBox">FPS --</div>
+</div>
+
+<!-- ================= CONTROLES ================= -->
+<div id="controls" class="hidden">
+  <div id="joyZone"><div id="joyBase"><div class="axisLbl roll">ROLL</div><div class="axisLbl pitch">PITCH</div><div id="joyStick"></div></div></div>
+  <div id="thrZone">
+    <div id="thrSlider"><div class="lbl">THR</div><div id="thrFill"></div><div id="thrHandle">0%</div></div>
+  </div>
+  <div id="btnCol">
+    <div class="cbtn" id="btnGear">TREM<small id="gearSub">ABAIXADO</small></div>
+    <div class="cbtn" id="btnFlaps">FLAPS<small id="flapsSub">0</small></div>
+    <div class="cbtn" id="btnSpr">SPR<small>SPOILER</small></div>
+    <div class="cbtn" id="btnRvs">RVS<small>REVERSO</small></div>
+    <div class="cbtn danger" id="btnBrk">FREIO<small id="brkSub">SEGURAR</small></div>
+  </div>
+  <div id="rudCol">
+    <div class="cbtn" id="btnRudL">◀ LEME</div>
+    <div class="cbtn" id="btnRudR">LEME ▶</div>
+  </div>
+  <div id="topBtns">
+    <div class="tbtn" id="btnCam">🎥</div>
+    <div class="tbtn" id="btnPause">⏸</div>
+    <div class="tbtn" id="btnTilt" title="controle por inclinação">📱</div>
+    <div class="tbtn" id="btnSound">🔊</div>
+  </div>
+</div>
+
+<!-- ================= INÍCIO ================= -->
+<div id="startOverlay" class="overlay">
+  <div class="panel">
+    <h1 class="title">REAL FLIGHT <span>SIMULATOR 3D</span></h1>
+    <div class="subtitle">SIMULAÇÃO DE AVIAÇÃO REALISTA · MOBILE</div>
+
+    <div class="secLbl">AERONAVE</div>
+    <div class="cards" id="acCards"></div>
+
+    <div class="secLbl">CONDIÇÃO INICIAL</div>
+    <div class="chipRow" id="startChips">
+      <div class="chip sel" data-v="runway">Pista · RWY 09</div>
+      <div class="chip" data-v="air">Em voo · 1000 ft</div>
+    </div>
+
+    <div class="secLbl">CLIMA</div>
+    <div class="chipRow" id="wxChips">
+      <div class="chip sel" data-v="clear">Céu limpo</div>
+      <div class="chip" data-v="windy">Ventania</div>
+      <div class="chip" data-v="cloudy">Nublado</div>
+      <div class="chip" data-v="storm">Tempestade</div>
+    </div>
+
+    <div class="secLbl">GRÁFICOS</div>
+    <div class="chipRow" id="gfxChips">
+      <div class="chip" data-v="low">BAIXO</div>
+      <div class="chip sel" data-v="medium">MÉDIO</div>
+      <div class="chip" data-v="high">ALTO</div>
+      <div class="chip" data-v="ultra">ULTRA</div>
+    </div>
+
+    <button class="bigBtn" id="btnStart">INICIAR VOO</button>
+    <div class="helpTxt">
+      Joystick: arfagem / rolagem · Slider: acelerador · LEME: guinada<br>
+      Teclado: setas ou WASD, W/S potência, Q/E leme, G trem, F flaps, B freio, V spoiler, R reverso, C câmera
+    </div>
+  </div>
+</div>
+
+<!-- ================= PAUSA ================= -->
+<div id="pauseOverlay" class="overlay hidden">
+  <div class="panel">
+    <h2>PAUSADO</h2>
+    <div class="secLbl">GRÁFICOS</div>
+    <div class="chipRow" id="gfxChips2">
+      <div class="chip" data-v="low">BAIXO</div>
+      <div class="chip" data-v="medium">MÉDIO</div>
+      <div class="chip" data-v="high">ALTO</div>
+      <div class="chip" data-v="ultra">ULTRA</div>
+    </div>
+    <div class="secLbl">CLIMA</div>
+    <div class="chipRow" id="wxChips2">
+      <div class="chip" data-v="clear">Céu limpo</div>
+      <div class="chip" data-v="windy">Ventania</div>
+      <div class="chip" data-v="cloudy">Nublado</div>
+      <div class="chip" data-v="storm">Tempestade</div>
+    </div>
+    <div class="secLbl">HORA DO DIA</div>
+    <div class="chipRow" id="timeChips">
+      <div class="chip" data-v="7">Amanhecer</div>
+      <div class="chip sel" data-v="12">Meio-dia</div>
+      <div class="chip" data-v="18.4">Pôr do sol</div>
+      <div class="chip" data-v="0">Noite</div>
+    </div>
+    <button class="bigBtn" id="btnResume">CONTINUAR</button>
+    <button class="ghostBtn" id="btnRestart">REINICIAR VOO</button>
+    <div class="helpTxt">Velocidade do tempo x60 · Câmera externa: arraste para orbitar, pinça para zoom</div>
+  </div>
+</div>
+
+<!-- ================= CRASH ================= -->
+<div id="crashOverlay" class="overlay hidden">
+  <div class="panel">
+    <h2>✈️ ACIDENTE</h2>
+    <p id="crashReason">Impacto com o solo.</p>
+    <p id="crashStats" style="color:#8fb4d6;font-size:12px;"></p>
+    <button class="bigBtn" id="btnFlyAgain">VOVAR NOVAMENTE</button>
+  </div>
+</div>
+
+<div id="loading"><div class="logo">REAL FLIGHT SIMULATOR 3D</div><div class="spin"></div><div style="font-size:11px;color:#7ea6c9;">Construindo mundo…</div></div>
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
